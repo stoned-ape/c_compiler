@@ -195,7 +195,8 @@ string func_wrap(string block,string name,int vars_sz=0){
     return s;
 }
 
-
+//this function generates instructions to pass function arguments
+//into the correct registers according to the system V calling convention
 string func_call_args(exp_node *node,int n=0){
     static string args[]={"%rdi","%rsi","%rdx","%rcx","%r8","%r9"};
     assert(n<6);
@@ -234,7 +235,8 @@ vector<exp_node*> extract_func_defs(exp_node *node){
     return v;
 }
 
-
+//this function takes agruments passed to a function through registers
+//and puts them on the stack within the local scope of the function
 string func_def_args(int vars_sz){
     static string args[]={"%rdi","%rsi","%rdx","%rcx","%r8","%r9"};
     string s="";
@@ -244,6 +246,7 @@ string func_def_args(int vars_sz){
     return s;
 }
 
+//injects code to save and restore caller saved registers for a function call
 string call_wrap(string s){
     for(int i=0;i<8;i++){
         s=stack_wrap(s,caller_saved[i]);
@@ -259,19 +262,19 @@ string call_wrap(string s){
 //that way, if the parent is an operator, it always knows where to find its operands
 string backend(exp_node *node,bool left,string tag,string func_name){
     if(!node) return "";
-    if(node->type==intl){
+    if(node->type==intl){ //for an int literal, just move it into the appropriate register
         string assm="";
         assm+=inst("movq","$"+node->lexeme,left ?"%rbx":"%rax");
         return assm;
     }
-    if(node->type==vname){
+    if(node->type==vname){ //for variables, we need to know the address and the value of that variable
         string assm="";
-        assm+=inst("movq",to_string(-(node->offset+1)*8)+"(%rbp)",left ?"%rbx":"%rax");
-        assm+=inst("leaq",to_string(-(node->offset+1)*8)+"(%rbp)",left ?"%r10":"%r9");
+        assm+=inst("movq",to_string(-(node->offset+1)*8)+"(%rbp)",left ?"%rbx":"%rax"); //get variables value
+        assm+=inst("leaq",to_string(-(node->offset+1)*8)+"(%rbp)",left ?"%r10":"%r9");  //get variables address
         if(node->scope) assm=scope_wrap(assm,node->vars_sz);
         return assm;
     }
-    if(node->type==binop){
+    if(node->type==binop){ //handles binary operators
         string assm="";
         assm+=backend(node->right,false,tag+"1",func_name);
         assm+=backend(node->left ,true ,tag+"0",func_name);
@@ -317,7 +320,7 @@ string backend(exp_node *node,bool left,string tag,string func_name){
         }
         
         if(left) assm=stack_wrap(stack_wrap(assm,"%rax"),"%r9");
-        if(node->scope) assm=scope_wrap(assm,node->vars_sz);
+        if(node->scope) assm=scope_wrap(assm,node->vars_sz);    //if in a local scope we must create a new stack frame
         return assm;
     }
     if(node->type==delim){
@@ -329,25 +332,26 @@ string backend(exp_node *node,bool left,string tag,string func_name){
     }
     if(node->type==keyword){
         string assm="";
-        if(node->lexeme=="if"){
+        if(node->lexeme=="if"){   //if statement
             assm+=tag+".if:\n";
-            assm+=backend(node->left ,false,tag+"0",func_name);
+            assm+=backend(node->left ,false,tag+"0",func_name); //condition expression
             assm+=inst("cmp","$0","%rax");
             assm+="\tje "+tag+".endif \n";
-            assm+=backend(node->right,false,tag+"1",func_name);
+            assm+=backend(node->right,false,tag+"1",func_name); //skip this if conditon is false
             assm+=tag+".endif:\n";
             
-        }else if(node->lexeme=="while"){
+        }else if(node->lexeme=="while"){   //while loop
             assm+=tag+".while:\n";
-            assm+=backend(node->left ,false,tag+"0",func_name);
+            assm+=backend(node->left ,false,tag+"0",func_name); //condition
             assm+=inst("cmp","$0","%rax");
             assm+="\tje "+tag+".endwhile \n";
-            assm+=backend(node->right,false,tag+"1",func_name);
+            assm+=backend(node->right,false,tag+"1",func_name); //loop body
             assm+="\tjmp "+tag+".while\n";
             assm+=tag+".endwhile:\n";
             
         }else if(node->lexeme=="for"){
             
+            //disassable the for loop parameter tree
             auto fpp=node->left;
             auto fpc=fpp->right;
             auto init=fpp->left;
@@ -359,11 +363,13 @@ string backend(exp_node *node,bool left,string tag,string func_name){
             if(com) assm+=backend(com,false,tag+"010",func_name);
             assm+=inst("cmp","$0","%rax");
             assm+="\tje "+tag+".endfor \n";
-            assm+=backend(node->right,false,tag+"1",func_name);
+            assm+=backend(node->right,false,tag+"1",func_name);  //loop body
             if(inc) assm+=backend(inc,false,tag+"010",func_name);
             assm+="\tjmp "+tag+".for\n";
             assm+=tag+".endfor:\n";
+            
         }else if(node->lexeme=="return"){
+            
             assm+=backend(node->left,false,tag+"1",func_name);
             assm+=inst("movq","%r15","%rbp");
             assm+=inst("movq","%r14","%rsp");
@@ -378,9 +384,9 @@ string backend(exp_node *node,bool left,string tag,string func_name){
         return assm;
     }
     if(node->type==fname){
-        if(node->isdec){
+        if(node->isdec){      //function definition
             string assm="";
-            assm+=backend(node->right,false,node->lexeme+"_",node->lexeme);
+            assm+=backend(node->right,false,node->lexeme+"_",node->lexeme); //function body
             assm=inst("movq","%rbp","%r15")+assm;
             assm=inst("movq","%rsp","%r14")+assm;
             assm=func_wrap(assm,node->lexeme,0);
@@ -392,11 +398,11 @@ string backend(exp_node *node,bool left,string tag,string func_name){
             assm=node->lexeme+":\n"+assm;
             assm+="\tretq\n";
             return assm;
-        }else{
+        }else{               //function call
             string assm="";
-            assm+=func_call_args(node->left);
-            assm+="\tcallq "+node->lexeme+"\n";
-            assm=call_wrap(assm);
+            assm+=func_call_args(node->left);  //put the arguments into appropriate registers
+            assm+="\tcallq "+node->lexeme+"\n";  //call the function
+            assm=call_wrap(assm);                //save caller saved registers
             if(node->scope) assm=scope_wrap(assm,node->vars_sz);
             return assm;
         }

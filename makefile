@@ -14,10 +14,10 @@ symstack.o: symstack.cpp symstack.h
 backend.o: backend.cpp backend.h
 	clang++ $(flags) backend.cpp -c
 
-compiler: compiler.cpp lexer.o parser.o symstack.o backend.o
-	clang++ $(flags) compiler.cpp lexer.o parser.o symstack.o backend.o -o compiler
+compiler: main.cpp lexer.o parser.o symstack.o backend.o
+	clang++ $(flags) main.cpp lexer.o parser.o symstack.o backend.o -o compiler
 	
-run: compiler lexer.h lexer.o parser.h parser.o
+run: compiler lexer.o parser.o symstack.o backend.o
 	./compiler
 	
 clean:

@@ -4,8 +4,6 @@
 //so it will assemble
 string asm_format(string s,string funcs=""){
     string h="";
-//    h+=".section    __TEXT,__text,regular,pure_instructions\n";
-//    h+=".build_version macos, 10, 15    sdk_version 10, 15, 6\n";
     h+=".globl    _main                   ## -- Begin function main\n";
     h+=".p2align    4, 0x90 \n";
     h+=funcs;
