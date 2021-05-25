@@ -69,9 +69,6 @@
 
 //long *operator(long *rdi,long *rsi);
 
-.global bruh@
-
-bruh@:
 
 //arithmatic
 _add:

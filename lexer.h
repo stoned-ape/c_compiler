@@ -12,6 +12,7 @@
 #ifndef lexer_h
 #define lexer_h
 
+
 using namespace std;
 
 //this preprocessor just removes comments and whitespace
