@@ -1,0 +1,166 @@
+#include "backend.h"
+
+//add some formating to the raw assembly the compiler generated
+//so it will assemble
+string asm_format(string s){
+    string h="";
+//    h+=".section    __TEXT,__text,regular,pure_instructions\n";
+//    h+=".build_version macos, 10, 15    sdk_version 10, 15, 6\n";
+    h+=".globl    _main                   ## -- Begin function main\n";
+    h+=".p2align    4, 0x90 \n";
+    h+="_main: \n";
+    s=h+s;
+    s+="\tretq\n";
+    return s;
+}
+
+//write a string into a file
+void string2file(string s,string fname){
+    int fd=open(fname.c_str(),O_RDWR|O_TRUNC|O_CREAT);
+    assert(fd!=0);
+    int er=write(fd,s.c_str(),s.size());
+    assert(er==s.size());
+}
+
+//use gcc to convert assembly file into a binary executable
+void assemble_file(string ass,string exe){
+    int id=fork();
+    if(id==0){
+        int e=execl("/usr/bin/gcc","gcc",ass.c_str(),"-o",exe.c_str(),nullptr);
+        assert(e!=-1);
+        exit(1);
+    }
+    int res=0;
+    waitpid(id,&res,0);
+    assert(WEXITSTATUS(res)==0);
+}
+
+//run an executable and return the exit status
+//Im using the exit code to get ouput from the generated program
+//total hack
+int exec_file(string fname){
+    int id=fork();
+    if(id==0){
+        int e=execl(fname.c_str(),fname.c_str(),nullptr);
+        assert(e!=-1);
+        exit(1);
+    }
+    int res=0;
+    waitpid(id,&res,0);
+    assert(WIFEXITED(res));
+    return  (int)(char)WEXITSTATUS(res);
+}
+
+//these functions are used to format c code from the command so it can be compiled
+string c_exp_format(string s){
+    string h="";
+    h+="int main(){\n";
+    h+="return "+s+";\n";
+    h+="}\n";
+    return h;
+}
+
+string c_block_format(string s){
+    string h="";
+    h+="int main(){\n";
+    h+="int r=0;\n";
+    h+=s;
+    h+="return r;\n";
+    h+="}\n";
+    return h;
+}
+
+//Im compiling input with gcc so it can be compared with the output from
+//my compiler
+void gcc_compile_file(string c,string exe){
+    int id=fork();
+    if(id==0){
+        int e=execl("/usr/bin/gcc","gcc","-w",c.c_str(),"-o",exe.c_str(),nullptr);
+        assert(e!=-1);
+        exit(1);
+    }
+    int res=0;
+    waitpid(id,&res,0);
+    assert(WEXITSTATUS(res)==0);
+}
+
+//to validate that this compiler works, I pass the same c code to gcc.
+//then I run both executables to see if the outputs match
+bool exp_validate(string ass,string s){
+    string ass_code=asm_format(ass);
+    string2file(ass_code,"gen.s");
+    assemble_file("gen.s","gen");
+    int mark=exec_file("gen");
+    cout<<"mark: "<<mark<<endl;
+    
+    string c_code=c_exp_format(s);
+    string2file(c_code,"groundtruth.c");
+    gcc_compile_file("groundtruth.c","groundtruth");
+    
+    int gcc=exec_file("groundtruth");
+    cout<<"gcc : "<<gcc<<endl;
+    
+    if(mark!=gcc) cout<<"validation failed\n";
+    return mark==gcc;
+}
+
+bool block_validate(string ass,string cc){
+    string ass_code=asm_format(ass);
+    string2file(ass_code,"gen.s");
+    assemble_file("gen.s","gen");
+    int mark=exec_file("gen");
+    cout<<"mark: "<<mark<<endl;
+    
+    string c_code=c_block_format(cc);
+    string2file(c_code,"groundtruth.c");
+    gcc_compile_file("groundtruth.c","groundtruth");
+    
+    int gcc=exec_file("groundtruth");
+    cout<<"gcc : "<<gcc<<endl;
+    
+    if(mark!=gcc) cout<<"validation failed\n";
+    return mark==gcc;
+    
+    return true;
+}
+
+
+int main(int argc,char **argv){
+    char buf[512];
+    cout<<"C compiler\n";
+    while(1){
+        memset(buf,0,sizeof buf);
+        write(1,">> ",3);
+        int n=read(0,buf,sizeof buf);
+        string s=buf;
+
+        s=preprocessor(s);
+        if(s.size()==0) continue;
+        
+
+        //cout<<s<<endl;
+        vector<token> vt=lexer("int r=0;"+s+"r;");
+        
+        //lex_print(&vt[0],vt.size());
+        
+        //exp_node root(&vt[0],vt.size());
+        block_node root(&vt[0],vt.size());
+        root.scope=true;
+        
+        
+        
+        
+        
+        stack_info(&root);
+        
+        //root.verbose_print();
+        root.right->left->print();
+        
+        string ass=backend(&root);
+        cout<<ass;
+        
+        block_validate(ass,s);
+        
+      
+    }
+}
