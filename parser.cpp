@@ -391,6 +391,8 @@ block_node::block_node(token *a,int n):exp_node(){
         type_str=a[0].lexeme;
         if(x>4) left=new exp_node(a+2,x-2);
         right=new block_node(a+x,n-x);
+        right->scope=false;
+        scope=true;
         return;
     }
     

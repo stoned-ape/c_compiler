@@ -185,6 +185,10 @@ ostream &operator<<(ostream &os,symstack st){
     return os;
 }
 
+string callee_saved[]={"%r15","%r14","%r13","%r12","%rbx"};
+string caller_saved[]={"%rcx","%rdx","%rsi","%rdi","%r8","%r9","%r10","%r11"};
+
+
 //encodes the size of stack frames and the relative addresses of
 //local variables into the abstract syntax tree
 void rec_stack_info(exp_node *node,symstack *st){
@@ -206,7 +210,18 @@ void rec_stack_info(exp_node *node,symstack *st){
     }else{
         //recursively traversing the tree
         rec_stack_info(node->left,st);
+        
+        int x=(node->isdec)?5:8;
+        if(node->type==fname){  //save regs
+            string *regs[]={caller_saved,callee_saved};
+            for(int i=0;i<x;i++) st->push(localvar(regs[node->isdec][i]));
+            cout<<*st;
+        }
         rec_stack_info(node->right,st);
+        if(node->type==fname){  //restore regs
+            for(int i=0;i<x;i++) st->pop();
+            cout<<*st;
+        }
     }
     if(node->scope){
         assert(st->sp>=st->bp);
@@ -228,11 +243,79 @@ string assign(string reg){
     return inst("movq",reg,"(%r10)");
 }
 
+//callee saved regs rbx,rbp,r12,...,r15
+string func_wrap(string block,string name,int vars_sz=0){
+    string s=block;
+    s+=name+".return:\n";
+    for(int i=0;i<5;i++){
+        s=stack_wrap(s,callee_saved[i]);
+    }
+    return s;
+}
+
+
+string func_call_args(exp_node *node,int n=0){
+    static string args[]={"%rdi","%rsi","%rdx","%rcx","%r8","%r9"};
+    assert(n<6);
+    if(!node) return "";
+    assert(node->type!=keyword);
+    string s="";
+    if(node->lexeme==","){
+        s+=func_call_args(node->right,n+1);
+        s+=func_call_args(node->left ,n);
+        return s;
+    }
+    s+=backend(node,false);
+    s+=inst("movq","%rax",args[n]);
+    return s;
+}
+
+//this function removes all subtrees that represent function definitions
+//from the main tree and puts them into a vector
+void rec_extract(exp_node *node,vector<exp_node*> &v){
+    if(!node) return;
+    if(node->left && node->left->type==fname && node->left->isdec){
+        v.push_back(node->left); //add to vector
+        node->left=nullptr;      //remove from main tree
+    }
+    if(node->right && node->right->type==fname && node->right->isdec){
+        v.push_back(node->right);
+        node->right=nullptr;
+    }
+    rec_extract(node->left ,v);
+    rec_extract(node->right,v);
+}
+//just a wrapper
+vector<exp_node*> extract_func_defs(exp_node *node){
+    vector<exp_node*> v;
+    rec_extract(node,v);
+    return v;
+}
+
+
+string func_def_args(int vars_sz){
+    static string args[]={"%rdi","%rsi","%rdx","%rcx","%r8","%r9"};
+    string s="";
+    for(int i=0;i<vars_sz;i++){
+        s+=inst("movq",args[i],to_string(-8*(i+1))+"(%rbp)");
+    }
+    return s;
+}
+
+string call_wrap(string s){
+    for(int i=0;i<8;i++){
+        s=stack_wrap(s,caller_saved[i]);
+    }
+    return s;
+}
+
+
+
 //putting it all together
 //all left nodes store their return value in rax
 //right nodes store return value in rbx
 //that way, if the parent is an operator, it always knows where to find its operands
-string backend(exp_node *node,bool left,string tag){
+string backend(exp_node *node,bool left,string tag,string func_name){
     if(!node) return "";
     if(node->type==intl){
         string assm="";
@@ -248,8 +331,8 @@ string backend(exp_node *node,bool left,string tag){
     }
     if(node->type==binop){
         string assm="";
-        assm+=backend(node->right,false,tag+"1");
-        assm+=backend(node->left ,true ,tag+"0");
+        assm+=backend(node->right,false,tag+"1",func_name);
+        assm+=backend(node->left ,true ,tag+"0",func_name);
         string reg1=left ?"%rax":"%rbx";
         string reg2=left ?"%rbx":"%rax";
         
@@ -297,29 +380,29 @@ string backend(exp_node *node,bool left,string tag){
     }
     if(node->type==delim){
         string assm="";
-        assm+=backend(node->left ,false,tag+"0");
-        assm+=backend(node->right,false,tag+"1");
+        assm+=backend(node->left ,false,tag+"0",func_name);
+        assm+=backend(node->right,false,tag+"1",func_name);
         if(node->scope) assm=scope_wrap(assm,node->vars_sz);
         return assm;
     }
     if(node->type==keyword){
         string assm="";
         if(node->lexeme=="if"){
-            assm+=tag+"if:\n";
-            assm+=backend(node->left ,false,tag+"0");
+            assm+=tag+".if:\n";
+            assm+=backend(node->left ,false,tag+"0",func_name);
             assm+=inst("cmp","$0","%rax");
-            assm+="\tje "+tag+"endif \n";
-            assm+=backend(node->right,false,tag+"1");
-            assm+=tag+"endif:\n";
+            assm+="\tje "+tag+".endif \n";
+            assm+=backend(node->right,false,tag+"1",func_name);
+            assm+=tag+".endif:\n";
             
         }else if(node->lexeme=="while"){
-            assm+=tag+"while:\n";
-            assm+=backend(node->left ,false,tag+"0");
+            assm+=tag+".while:\n";
+            assm+=backend(node->left ,false,tag+"0",func_name);
             assm+=inst("cmp","$0","%rax");
-            assm+="\tje "+tag+"endwhile \n";
-            assm+=backend(node->right,false,tag+"1");
-            assm+="\tjmp "+tag+"while\n";
-            assm+=tag+"endwhile:\n";
+            assm+="\tje "+tag+".endwhile \n";
+            assm+=backend(node->right,false,tag+"1",func_name);
+            assm+="\tjmp "+tag+".while\n";
+            assm+=tag+".endwhile:\n";
             
         }else if(node->lexeme=="for"){
             
@@ -329,15 +412,21 @@ string backend(exp_node *node,bool left,string tag){
             auto com=fpc->left;
             auto inc=fpc->right;
             
-            if(init) assm+=backend(init,false,tag+"00");
-            assm+=tag+"for:\n";
-            if(com) assm+=backend(com,false,tag+"010");
+            if(init) assm+=backend(init,false,tag+"00",func_name);
+            assm+=tag+".for:\n";
+            if(com) assm+=backend(com,false,tag+"010",func_name);
             assm+=inst("cmp","$0","%rax");
-            assm+="\tje "+tag+"endfor \n";
-            assm+=backend(node->right,false,tag+"1");
-            if(inc) assm+=backend(inc,false,tag+"010");
-            assm+="\tjmp "+tag+"for\n";
-            assm+=tag+"endfor:\n";
+            assm+="\tje "+tag+".endfor \n";
+            assm+=backend(node->right,false,tag+"1",func_name);
+            if(inc) assm+=backend(inc,false,tag+"010",func_name);
+            assm+="\tjmp "+tag+".for\n";
+            assm+=tag+".endfor:\n";
+        }else if(node->lexeme=="return"){
+            assm+=backend(node->left,false,tag+"1",func_name);
+            assm+=inst("movq","%r15","%rbp");
+            assm+=inst("movq","%r14","%rsp");
+            assert(func_name.size()!=0);
+            assm+="\tjmp "+func_name+".return \n";
             
         }else{
             cout<<"undefined keyword\n";
@@ -345,6 +434,30 @@ string backend(exp_node *node,bool left,string tag){
         }
         if(node->scope) assm=scope_wrap(assm,node->vars_sz);
         return assm;
+    }
+    if(node->type==fname){
+        if(node->isdec){
+            string assm="";
+            assm+=backend(node->right,false,node->lexeme+"_",node->lexeme);
+            assm=inst("movq","%rbp","%r15")+assm;
+            assm=inst("movq","%rsp","%r14")+assm;
+            assm=func_wrap(assm,node->lexeme,0);
+            assert(node->scope);
+            
+            assm=func_def_args(node->vars_sz)+assm;
+            
+            assm=scope_wrap(assm,node->vars_sz);
+            assm=node->lexeme+":\n"+assm;
+            assm+="\tretq\n";
+            return assm;
+        }else{
+            string assm="";
+            assm+=func_call_args(node->left);
+            assm+="\tcallq "+node->lexeme+"\n";
+            assm=call_wrap(assm);
+            if(node->scope) assm=scope_wrap(assm,node->vars_sz);
+            return assm;
+        }
     }
     cout<<"unimplemented language feature\n";
     throw(0);

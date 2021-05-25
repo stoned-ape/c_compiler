@@ -36,6 +36,8 @@ struct token{
     }
 };
 
+int biggest_match(string s,string rgx);
+
 //print a token
 ostream &operator<<(ostream &os,token t);
 //perform lexical analysis on c source code

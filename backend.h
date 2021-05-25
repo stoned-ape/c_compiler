@@ -64,8 +64,9 @@ ostream &operator<<(ostream &os,symstack st);
 void rec_stack_info(exp_node *node,symstack *st);
 void stack_info(exp_node *node);
 
+vector<exp_node*> extract_func_defs(exp_node *node);
 
 //converts and AST into assembly code
-string backend(exp_node *node,bool left=false,string tag="tag_");
+string backend(exp_node *node,bool left=false,string tag="tag_",string func_name="");
 
 #endif

@@ -2,12 +2,13 @@
 
 //add some formating to the raw assembly the compiler generated
 //so it will assemble
-string asm_format(string s){
+string asm_format(string s,string funcs=""){
     string h="";
 //    h+=".section    __TEXT,__text,regular,pure_instructions\n";
 //    h+=".build_version macos, 10, 15    sdk_version 10, 15, 6\n";
     h+=".globl    _main                   ## -- Begin function main\n";
     h+=".p2align    4, 0x90 \n";
+    h+=funcs;
     h+="_main: \n";
     s=h+s;
     s+="\tretq\n";
@@ -84,6 +85,15 @@ void gcc_compile_file(string c,string exe){
     assert(WEXITSTATUS(res)==0);
 }
 
+void block_run(string ass,string funcs){
+    string ass_code=asm_format(ass,funcs);
+    string2file(ass_code,"gen.s");
+    assemble_file("gen.s","gen");
+    int mark=exec_file("gen");
+    cout<<"mark: "<<mark<<endl;
+}
+
+
 //to validate that this compiler works, I pass the same c code to gcc.
 //then I run both executables to see if the outputs match
 bool exp_validate(string ass,string s){
@@ -124,6 +134,18 @@ bool block_validate(string ass,string cc){
     return true;
 }
 
+string funcs_asm(exp_node* root){
+    auto ftrees=extract_func_defs(root);
+    string s="";
+    for(auto i:ftrees){
+        i->print();
+        stack_info(i);
+        s+=backend(i);
+    }
+    cout<<s;
+    return s;
+}
+
 
 int main(int argc,char **argv){
     char buf[512];
@@ -148,18 +170,19 @@ int main(int argc,char **argv){
         root.scope=true;
         
         
-        
+        string fasm=funcs_asm(&root);
         
         
         stack_info(&root);
         
         //root.verbose_print();
-        root.right->left->print();
+        root.print();
         
         string ass=backend(&root);
         cout<<ass;
+        block_run(ass,fasm);
         
-        block_validate(ass,s);
+        //block_validate(ass,s);
         
       
     }
