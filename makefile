@@ -20,5 +20,8 @@ compiler: main.cpp lexer.o parser.o symstack.o backend.o
 run: compiler lexer.o parser.o symstack.o backend.o
 	./compiler
 	
+test: compiler lexer.o parser.o symstack.o backend.o
+	./test.sh
+	
 clean:
 	rm *.o compiler

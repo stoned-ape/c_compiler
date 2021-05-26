@@ -153,15 +153,31 @@ void rec_stack_info(exp_node *node,symstack *st){
         //recursively traversing the tree
         rec_stack_info(node->left,st);
         
-        int x=(node->isdec)?5:8;
+        int fsp=0;
         if(node->type==fname){  //save regs
+            int reg_num=(node->isdec)?5:8;
             string *regs[]={caller_saved,callee_saved};
-            for(int i=0;i<x;i++) st->push(localvar(regs[node->isdec][i]));
+            for(int i=0;i<reg_num;i++) st->push(localvar(regs[node->isdec][i]));
+            
+            if(node->isdec){
+                fsp=st->sp;
+            }
+            
             cout<<*st;
         }
         rec_stack_info(node->right,st);
-        if(node->type==fname){  //restore regs
-            for(int i=0;i<x;i++) st->pop();
+        if(node->type==fname){//restore regs
+            
+//            if(node->isdec){
+//                int reg_num=st->sp-fsp;
+//                for(int i=0;i<reg_num;i++) st->pop();
+//                cout<<*st;
+//            }
+            
+            int reg_num=(node->isdec)?5:8;
+            for(int i=0;i<reg_num;i++) st->pop();
+            
+            
             cout<<*st;
         }
     }
@@ -217,6 +233,11 @@ string func_call_args(exp_node *node,int n=0){
 //from the main tree and puts them into a vector
 void rec_extract(exp_node *node,vector<exp_node*> &v){
     if(!node) return;
+    if(node->type==fname && node->isdec){
+        v.push_back(node);
+        node=nullptr;
+        return;
+    }
     if(node->left && node->left->type==fname && node->left->isdec){
         v.push_back(node->left); //add to vector
         node->left=nullptr;      //remove from main tree
@@ -386,24 +407,28 @@ string backend(exp_node *node,bool left,string tag,string func_name){
     if(node->type==fname){
         if(node->isdec){      //function definition
             string assm="";
-            assm+=backend(node->right,false,node->lexeme+"_",node->lexeme); //function body
+            assm+=backend(node->right,false,"_"+node->lexeme+"_","_"+node->lexeme); //function body
             assm=inst("movq","%rbp","%r15")+assm;
             assm=inst("movq","%rsp","%r14")+assm;
-            assm=func_wrap(assm,node->lexeme,0);
+            assm=func_wrap(assm,"_"+node->lexeme,0);
             assert(node->scope);
             
             assm=func_def_args(node->vars_sz)+assm;
             
             assm=scope_wrap(assm,node->vars_sz);
-            assm=node->lexeme+":\n"+assm;
+            assm="_"+node->lexeme+":\n"+assm;
             assm+="\tretq\n";
             return assm;
         }else{               //function call
             string assm="";
             assm+=func_call_args(node->left);  //put the arguments into appropriate registers
-            assm+="\tcallq "+node->lexeme+"\n";  //call the function
+            assm+="\tcallq _"+node->lexeme+"\n";  //call the function
             assm=call_wrap(assm);                //save caller saved registers
             if(node->scope) assm=scope_wrap(assm,node->vars_sz);
+            if(left){
+                assm+=inst("movq","%rax","%rbx"); //if were on the left we need the result in rbx
+                assm=stack_wrap(stack_wrap(assm,"%rax"),"%r9"); //and we must save rax
+            }
             return assm;
         }
     }

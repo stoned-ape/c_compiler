@@ -44,22 +44,34 @@ bool char_match(char c,string s){
     return false;
 }
 
+bool non_printable(char c){
+    return c<32;
+}
+
 //remove tabs and new lines
 string nospecwhitespace(string s){
     bool quote=false;
-    string banned="\n\t";
+    string banned="\n\t\r";
+    assert(banned.size()==3);
     for(int i=0;i<s.size();i++){
         if(s[i]=='"') quote=!quote;
-        if(char_match(s[i],banned) && !quote) s.erase(s.begin()+i);
+        if((char_match(s[i],banned) || non_printable(s[i])) && !quote){
+            s.erase(s.begin()+i);
+            i--;
+        }
     }
     return s;
 }
 
 //putting it all together
 string preprocessor(string s){
+//    cout<<endl<<endl<<endl;
     s=nocomment(s);
-    s=onespace(s);
     s=nospecwhitespace(s);
+//    cout<<endl<<s<<endl;
+    s=onespace(s);
+//    cout<<endl<<s<<endl;
+    for(int i=0;i<s.size()-1;i++) assert(!(s[i]==' ' && s[i+1]==' '));
     return s;
 }
 //tokens

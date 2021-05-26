@@ -32,7 +32,10 @@ struct token{
     token(string s){
         if(s.size()==0) return;
         n=test_all(s,type);
-        assert(n>0);
+        if(n<=0){
+            cout<<"lexer error :"<<s<<endl;
+            throw(0);
+        }
         lexeme=s.substr(0,n);
     }
 };

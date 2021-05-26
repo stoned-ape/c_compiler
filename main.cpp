@@ -135,10 +135,15 @@ bool block_validate(string ass,string cc){
 string funcs_asm(exp_node* root){
     auto ftrees=extract_func_defs(root);
     string s="";
+    vector<string> func_names;
     for(auto i:ftrees){
         i->print();
         stack_info(i);
         s+=backend(i);
+        func_names.push_back("_"+i->lexeme);
+    }
+    for(auto i:func_names){
+        s=".global "+i+"\n"+s;
     }
     cout<<s;
     return s;
@@ -146,6 +151,36 @@ string funcs_asm(exp_node* root){
 
 
 int main(int argc,char **argv){
+    if(argc>1){
+        cout<<"file mode\n";
+        int fd=open(argv[1],O_RDONLY);
+        assert(fd!=-1);
+        int len=lseek(fd,0,SEEK_END);
+        assert(len!=-1);
+        lseek(fd,0,SEEK_SET);
+        char buf[len];
+        int rd=read(fd,buf,len);
+        close(fd);
+        assert(rd==len);
+        string code="";
+        for(int i=0;i<len;i++) code+=buf[i];
+        cout<<code;
+        cout<<"\nlength: "<<len<<endl;
+        code=preprocessor(code);
+//        cout<<code<<endl;
+        vector<token> vt=lexer(code);
+        block_node root(&vt[0],vt.size());
+//        root.print();
+        code=funcs_asm(&root);
+//        cout<<"nig\n"<<code;
+        fd=open("gen.s",O_RDWR|O_CREAT|O_TRUNC);
+        assert(fd!=-1);
+        len=write(fd,&code[0],code.size());
+        assert(len==code.size());
+        exit(0);
+    }
+    
+    
     char buf[512];
     cout<<"C compiler\n";
     while(1){

@@ -128,15 +128,6 @@ exp_node::exp_node(token *a,int n){
         if(n!=3) left=new exp_node(a+1,n-1);
         return;
     }
-    if(is_func_def(a,n)){
-        assert(a[2].lexeme=="(");
-        isdec=true;
-        type=a[1].type;
-        lexeme=a[1].lexeme;
-        type_str=a[0].lexeme;
-        if(n!=4) left=new exp_node(a+2,n-2);
-        return;
-    }
     // exp -> exp binary_operator exp
     int x=split_by_all(a,n);
     *this=exp_node(a+x,1);
@@ -161,41 +152,6 @@ void exp_node::verbose_print(int n){
     cout<<", scope : "<<scope<<", off : "<<offset<<", vsc : "<<vars_sz;
     cout<<", dec : "<<isdec<<"}\n";
     if(left) left->verbose_print(n+1);
-}
-//unfinished
-string exp_node::add_parens(exp_node *c,string s){
-    if(c && c->type==binop && op_prec(lexeme)>op_prec(c->lexeme))
-        return p_wrap(s);
-    return s;
-}
-//unfinished
-string exp_node::stringify(bool is_block){
-    if((type==intl && type<=tname) || type==vname)
-        return lexeme+(is_block ?";":"");
-    string ls="",rs="";
-    bool lblock,rblock;
-    lblock=rblock=is_block;
-    switch(type){
-        case binop: lblock=rblock=false;break;
-        case delim: lblock=rblock=true;break;
-        default:;
-    }
-    if(left) ls=left->stringify(lblock);
-    if(right) rs=right->stringify(rblock);
-    string fs="";
-    switch(type){
-        case binop:
-            ls=add_parens(left,ls);
-            rs=add_parens(right,rs);
-            fs=ls+lexeme+rs;
-            break;
-        case delim:
-            if(lexeme=="{}") fs="{"+ls+"}"+rs;
-            else fs=ls+";"+rs;
-            break;
-        default:;
-    }
-    return fs+(is_block ?";":"");
 }
 
 //a basic block is a c expression followed by a semicolon and nothing more
@@ -391,7 +347,7 @@ block_node::block_node(token *a,int n):exp_node(){
         type_str=a[0].lexeme;
         if(x>4) left=new exp_node(a+2,x-2);
         right=new block_node(a+x,n-x);
-        right->scope=false;
+        right->scope=true;
         scope=true;
         return;
     }
