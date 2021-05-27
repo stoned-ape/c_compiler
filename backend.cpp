@@ -276,6 +276,15 @@ string call_wrap(string s){
 }
 
 
+string bool_not(){
+    string s="";
+    s+=inst("movq","$1","%rcx");
+    s+=inst("cmpq","$0","%rax");
+    s+=inst("movq","$0","%rax");
+    s+=inst("cmoveq","%rcx","%rax");
+    return s;
+}
+
 
 //putting it all together
 //all left nodes store their return value in rax
@@ -293,6 +302,32 @@ string backend(exp_node *node,bool left,string tag,string func_name){
         assm+=inst("movq",to_string(-(node->offset+1)*8)+"(%rbp)",left ?"%rbx":"%rax"); //get variables value
         assm+=inst("leaq",to_string(-(node->offset+1)*8)+"(%rbp)",left ?"%r10":"%r9");  //get variables address
         if(node->scope) assm=scope_wrap(assm,node->vars_sz);
+        return assm;
+    }
+    if(node->type==uop){
+        
+        string assm="";
+        assm+=backend(node->right,false,tag+"1",func_name);
+        string reg1=left ?"%rax":"%rbx";
+        string reg2=left ?"%rbx":"%rax";
+        
+        if     (node->lexeme=="+" ) assm+="";
+        else if(node->lexeme=="-" ) assm+="\tnegq %rax \n";
+        else if(node->lexeme=="--") assm+="\tdecq %rax \n"+inst("movq","%rax","(%r9)");
+        else if(node->lexeme=="++") assm+="\tincq %rax \n"+inst("movq","%rax","(%r9)");
+        else if(node->lexeme=="!" ) assm+=bool_not();
+        else if(node->lexeme=="~" ) assm+="\tnotq %rax \n";
+        else if(node->lexeme=="&" ) assm+=reg_swap("%rax","%r9");
+        else if(node->lexeme=="*" ) assm+=reg_swap("%rax","%r9");
+        
+        
+        
+        if(left){
+            assm+=inst("movq","%rax","%rbx");
+            assm+=inst("movq","%r9","%r10");
+            assm=stack_wrap(stack_wrap(assm,"%rax"),"%r9");
+        }
+        if(node->scope) assm=scope_wrap(assm,node->vars_sz);    //if in a local scope we must create a new stack frame
         return assm;
     }
     if(node->type==binop){ //handles binary operators

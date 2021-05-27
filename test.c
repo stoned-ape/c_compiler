@@ -11,7 +11,7 @@ int fac1(int n){
 
 int fac2(int n){
     int f=1;
-    for(int i=1;i<=n;i+=1) f*=i;
+    for(int i=1;i<=n;++i) f*=i;
     return f;
 }
 

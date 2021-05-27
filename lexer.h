@@ -20,7 +20,7 @@ string preprocessor(string s);
 
 
 enum token_type{keyword,binop,wrap,delim,
-                intl,floatl,charl,cstrl,tname,vname,fname,forparams};
+                intl,floatl,charl,cstrl,tname,vname,fname,uop,forparams};
 
 
 int test_all(string s,token_type &type);

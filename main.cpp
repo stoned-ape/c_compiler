@@ -193,23 +193,27 @@ int main(int argc,char **argv){
         if(s.size()==0) continue;
         
 
-        //cout<<s<<endl;
-        vector<token> vt=lexer("int r=0;"+s+"r;");
         
-        //lex_print(&vt[0],vt.size());
+        s="int r=0;"+s+"r;";
+        vector<token> vt=lexer(s);
+        
+        lex_print(&vt[0],vt.size());
+        
+       
         
         //exp_node root(&vt[0],vt.size());
         block_node root(&vt[0],vt.size());
         root.scope=true;
         
-        
+        root.right->left->print();
+        //continue;
         string fasm=funcs_asm(&root);
         
         
         stack_info(&root);
         
         //root.verbose_print();
-        root.print();
+       // root.print();
         
         string ass=backend(&root);
         cout<<ass;

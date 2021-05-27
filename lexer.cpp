@@ -65,12 +65,9 @@ string nospecwhitespace(string s){
 
 //putting it all together
 string preprocessor(string s){
-//    cout<<endl<<endl<<endl;
     s=nocomment(s);
     s=nospecwhitespace(s);
-//    cout<<endl<<s<<endl;
     s=onespace(s);
-//    cout<<endl<<s<<endl;
     for(int i=0;i<s.size()-1;i++) assert(!(s[i]==' ' && s[i+1]==' '));
     return s;
 }
@@ -102,6 +99,14 @@ int test_typename(string s){
     static string tns[]={"char","int","long","float","double","void"};
     for(int i=0;i<sizeof(tns);i++){
         if(s.substr(0,tns[i].size())==tns[i]) return tns[i].size();
+    }
+    return -1;
+}
+
+int test_u_op(string s){
+    static string bos[]={"--","++","-","+","&","!","~","*"};
+    for(int i=0;i<sizeof(bos);i++){
+        if(s.substr(0,bos[i].size())==bos[i]) return bos[i].size();
     }
     return -1;
 }
@@ -179,14 +184,16 @@ int test_fname(string s){
 //used for printing purposes
 string token_type_names[]={
     "keyword","binop","wrap","delim",
-    "intl","floatl","charl","cstrl","tname","vname","fname","forparams"
+    "intl","floatl","charl","cstrl","tname",
+    "vname","fname","uop","forparams"
 };
 //find the longest possible match
 int test_all(string s,token_type &type){
     static int (*funcs[])(string)={
         test_keyword,test_bin_op,test_wrapper,test_delimiter,
         test_int_literal,test_float_literal,test_char_literal,
-        test_cstr_literal,test_typename,test_vname,test_fname
+        test_cstr_literal,test_typename,test_vname,test_fname,
+        test_u_op
     };
     int mx=-1;
     for(int i=0;i<sizeof(funcs)/8;i++){
@@ -200,17 +207,41 @@ int test_all(string s,token_type &type){
 }
 
 
+bool is_u_op(token *prev,token *now){
+    assert(prev!=now);
+    if(now->lexeme!="+" && now->lexeme!="-" &&
+       now->lexeme!="&" && now->lexeme!="*") return false;
+    assert(now->type==binop);
+    if(!prev) return true;
+    switch(prev->type){
+        case keyword: return true;
+        case binop: return true;
+        case wrap: return prev->lexeme=="(" || prev->lexeme=="{";
+        case delim: return true;
+        case uop: return true;
+        default: return false;
+    }
+    assert(1==0);
+//    keyword,binop,wrap,delim,
+//    intl,floatl,charl,cstrl,tname,vname,fname,forparams
+    return false;
+}
+
 //converts a string of c source code into a vector of tokens
 vector<token> lexer(string s){
     int i=0;
     vector<token> v;
+    token *prev=nullptr;
     while(i<s.size()){
         if(s[i]==' '){
             i++;
         }
         token t(s.substr(i,s.size()));
+//        assert(t.type!=uop);
+        if(is_u_op(prev,&t)) t.type=uop;
         v.push_back(t);
         i+=t.n;
+        prev=&v[v.size()-1];
     }
     return v;
 }

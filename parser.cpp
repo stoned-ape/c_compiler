@@ -27,13 +27,13 @@ int split_by_operator(token *a,int n,string op,bool l2r){
         for(int i=n-1;i>=0;i--){
             if(a[i].lexeme=="(") p++;
             if(a[i].lexeme==")") p--;
-            if(a[i].lexeme==op && p==0) return i;
+            if(a[i].lexeme==op && p==0 && a[i].type!=uop) return i;
         }
     }else{    //and forwards for right to left associative operators
         for(int i=0;i<n;i++){
             if(a[i].lexeme=="(") p++;
             if(a[i].lexeme==")") p--;
-            if(a[i].lexeme==op && p==0) return i;
+            if(a[i].lexeme==op && p==0 && a[i].type!=uop) return i;
         }
     }
     return -1;
@@ -112,7 +112,19 @@ exp_node::exp_node(token *a,int n){
         *this=exp_node(a+1,n-2);
         return;
     }
+    if(a[0].type==uop && is_enclosed(a+1,n-1)){  //exp -> urinary_operator (exp)
+        type=a[0].type;
+        lexeme=a[0].lexeme;
+        right=new exp_node(a+2,n-3);
+        return;
+    }
     if(n==2){    //exp -> type_name variable_name
+        if(a[0].type==uop){    //exp -> urinary_operator exp
+            type=a[0].type;
+            lexeme=a[0].lexeme;
+            right=new exp_node(a+1,n-1);
+            return;
+        }
         assert(a[0].type==tname);
         assert(a[1].type==vname);
         type=a[1].type;
@@ -130,10 +142,20 @@ exp_node::exp_node(token *a,int n){
     }
     // exp -> exp binary_operator exp
     int x=split_by_all(a,n);
-    *this=exp_node(a+x,1);
-    left=new exp_node(a,x);
-    right=new exp_node(a+x+1,n-x-1);
-    assert(x!=-1);
+    if(x!=-1){
+        *this=exp_node(a+x,1);
+        left=new exp_node(a,x);
+        right=new exp_node(a+x+1,n-x-1);
+        return;
+    }
+    if(a[0].type==uop){
+        cout<<"uop\n";
+        type=a[0].type;
+        lexeme=a[0].lexeme;
+        right=new exp_node(a+1,n-1);
+        return;
+    }
+    assert(1==0);
         
 }
 
