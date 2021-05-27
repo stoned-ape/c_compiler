@@ -167,12 +167,9 @@ int main(int argc,char **argv){
         cout<<code;
         cout<<"\nlength: "<<len<<endl;
         code=preprocessor(code);
-//        cout<<code<<endl;
         vector<token> vt=lexer(code);
         block_node root(&vt[0],vt.size());
-//        root.print();
         code=funcs_asm(&root);
-//        cout<<"nig\n"<<code;
         fd=open("gen.s",O_RDWR|O_CREAT|O_TRUNC);
         assert(fd!=-1);
         len=write(fd,&code[0],code.size());
